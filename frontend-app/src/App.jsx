@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { 
   BarChart3, 
   Cpu, 
@@ -8,16 +9,21 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Clock, 
-  ShieldCheck 
+  ShieldCheck,
+  LogOut
 } from 'lucide-react';
 import api from './api';
+import Login from './components/Login';
+import Register from './components/Register';
 
-function App() {
+const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [assets, setAssets] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const username = localStorage.getItem('username');
 
   useEffect(() => {
     fetchData();
@@ -36,9 +42,19 @@ function App() {
       setServices(servicesRes.data);
     } catch (error) {
       console.error("Error fetching data:", error);
+      if (error.response?.status === 401) {
+        handleLogout();
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    navigate('/login');
+    window.dispatchEvent(new Event('storage'));
   };
 
   const Sidebar = () => (
@@ -46,7 +62,7 @@ function App() {
       <div className="sidebar-brand">
         VEMRE <span style={{ color: 'white' }}>SUPPORT</span>
       </div>
-      <nav>
+      <nav style={{ flex: 1 }}>
         <button 
           onClick={() => setActiveTab('dashboard')} 
           className={`nav-link ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -74,14 +90,21 @@ function App() {
       </nav>
       
       <div style={{ marginTop: 'auto' }}>
-        <div className="card" style={{ padding: '1rem', background: '#0f172a', marginBottom: 0 }}>
+        <button 
+          onClick={handleLogout}
+          className="nav-link" 
+          style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', color: '#ef4444' }}
+        >
+          <LogOut size={20} /> Logout
+        </button>
+        <div className="card" style={{ padding: '1rem', background: '#0f172a', marginBottom: 0, marginTop: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ padding: '0.5rem', background: '#334155', borderRadius: '50%' }}>
               <ShieldCheck size={20} color="#6366f1" />
             </div>
             <div>
-              <p style={{ fontSize: '0.8rem', fontWeight: 600 }}>System Secure</p>
-              <p className="text-muted" style={{ fontSize: '0.7rem' }}>Monitoring Active</p>
+              <p style={{ fontSize: '0.8rem', fontWeight: 600 }}>{username || 'System'}</p>
+              <p className="text-muted" style={{ fontSize: '0.7rem' }}>Secure Session</p>
             </div>
           </div>
         </div>
@@ -89,7 +112,7 @@ function App() {
     </div>
   );
 
-  const Dashboard = () => (
+  const OverView = () => (
     <div>
       <div className="top-bar">
         <h1>Overview</h1>
@@ -100,17 +123,17 @@ function App() {
         <div className="card">
           <p className="text-muted">Total Assets</p>
           <h2>{assets.length}</h2>
-          <div style={{ color: '#10b981', fontSize: '0.8rem' }}>+2 this month</div>
+          <div style={{ color: '#10b981', fontSize: '0.8rem' }}>Monitoring Active</div>
         </div>
         <div className="card">
           <p className="text-muted">Open Tickets</p>
           <h2 style={{ color: '#f87171' }}>{tickets.filter(t => t.status !== 'CLOSED').length}</h2>
-          <div style={{ color: '#f87171', fontSize: '0.8rem' }}>{tickets.filter(t => t.priority === 'URGENT').length} Urgent</div>
+          <div style={{ color: '#f87171', fontSize: '0.8rem' }}>Requires Attention</div>
         </div>
         <div className="card">
           <p className="text-muted">Services Status</p>
           <h2 style={{ color: '#22d3ee' }}>{services.filter(s => s.status).length}/{services.length}</h2>
-          <div style={{ color: '#22d3ee', fontSize: '0.8rem' }}>All primary systems UP</div>
+          <div style={{ color: '#22d3ee', fontSize: '0.8rem' }}>Systems Healthy</div>
         </div>
       </div>
 
@@ -129,11 +152,11 @@ function App() {
             </tr>
           </thead>
           <tbody>
-            {tickets.slice(0, 5).map(ticket => (
+            {(tickets || []).slice(0, 5).map(ticket => (
               <tr key={ticket.id}>
                 <td style={{ fontWeight: 600 }}>{ticket.title}</td>
                 <td className="text-muted">{ticket.asset_name}</td>
-                <td><span className={`tag tag-${ticket.priority.toLowerCase()}`}>{ticket.priority}</span></td>
+                <td><span className={`tag tag-${(ticket.priority || 'MEDIUM').toLowerCase()}`}>{ticket.priority}</span></td>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     {ticket.status === 'RESOLVED' ? <CheckCircle2 size={16} color="#10b981" /> : <Clock size={16} color="#fbbf24" />}
@@ -180,7 +203,7 @@ function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'dashboard' && <Dashboard />}
+            {activeTab === 'dashboard' && <OverView />}
             {activeTab === 'assets' && <Assets />}
             {activeTab === 'tickets' && <div className="card"><h2>Support Ticket Management</h2><p className="text-muted">Ticket module is ready for expanding.</p></div>}
             {activeTab === 'services' && <div className="card"><h2>Service Status Desk</h2><p className="text-muted">Service monitoring is active.</p></div>}
@@ -188,6 +211,28 @@ function App() {
         )}
       </main>
     </div>
+  );
+};
+
+function App() {
+  const [token, setToken] = useState(localStorage.getItem('token'));
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setToken(localStorage.getItem('token'));
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  return (
+    <Router>
+      <Routes>
+        <Route path="/login" element={token ? <Navigate to="/" /> : <Login />} />
+        <Route path="/register" element={token ? <Navigate to="/" /> : <Register />} />
+        <Route path="/" element={token ? <Dashboard /> : <Navigate to="/login" />} />
+      </Routes>
+    </Router>
   );
 }
 
